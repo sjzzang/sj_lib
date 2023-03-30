@@ -14,6 +14,7 @@ IF (CURL_FOUND)
     add_library(${PROJECT_NAME} ${srcs})
     include_directories(
             ${CURL_INCLUDE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../util
             ${CMAKE_CURRENT_SOURCE_DIR}/../xthread
     )
     target_link_libraries(telegramagent ${CURL_LIBRARIES})
