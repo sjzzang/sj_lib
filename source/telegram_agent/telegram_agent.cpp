@@ -50,10 +50,10 @@ void telegram_agent::sendMessage(std::string chatId, std::string text) {
 void telegram_agent::getMessage()
 {
     cout<<"Come"<<endl;
-    std::string data;
+    std::string strData;
     std::string strGet_url = "https://api.telegram.org/bot" + getApikey() + "/getUpdates";
     curl_easy_setopt(m_get_curl, CURLOPT_WRITEFUNCTION, write_to_string);
-    curl_easy_setopt(m_get_curl, CURLOPT_WRITEDATA, &data);
+    curl_easy_setopt(m_get_curl, CURLOPT_WRITEDATA, &strData);
     curl_easy_setopt(m_get_curl, CURLOPT_URL, strGet_url.c_str());
     int rc = curl_easy_perform(m_get_curl);
     //curl_easy_cleanup(m_get_curl);
@@ -69,15 +69,29 @@ void telegram_agent::getMessage()
         return;
     }
 
-    cout<<data<<endl;
-    /*Json::Reader reader;
+    cout<<strData<<endl;
+    Json::Reader reader;
     Json::Value root;
-    bool parsingRet = reader.parse(out, root);
+    std::string strMessage;
+    bool parsingRet = reader.parse(strData, root);
     if (!parsingRet) {
-        Log(ERROR_LOG_LEVEL, "[fence_manager] Send fence data fail.[parse:%s]", reader.getFormattedErrorMessages().c_str());
+        cout<<format("[telegram_agent] Can't parse data.[parse:%s]", reader.getFormattedErrorMessages().c_str())<<endl;
         return;
     }
-*/
+    cout<<format("[telegram_agent] %s]", "parse OK!")<<endl;
+
+    Json::Value &data = root["ok"];
+    std::string sample = data.asString();
+
+    if(data.asString().compare("ok")==0)
+    {
+        data = root["result"];
+        int datasize = data.size();
+        cout<<format("[telegram_agent] %s]", sample.c_str())<<endl;
+    }
+
+
+
 }
 int telegram_agent::Proc(){
 
