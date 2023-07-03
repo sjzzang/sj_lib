@@ -2,11 +2,16 @@
 
 // 텔레그램 API 키
 using namespace std;
-telegram_agent::telegram_agent(std::string api_key, std::string chat_id){
+telegram_agent::telegram_agent(std::string api_key, vector<string> chat_id, int update_id =0){
     m_Api_key = api_key;
-    m_Chat_id = chat_id;
+    vChatId = chat_id;
+    update_id_ = update_id;
 
     initCurl();
+
+    naverMacro = new naver_macro();
+    naverMacro->setIndex(1);
+    naverMacro->SetCPS(1/30);
     //sendMessage(chat_id, "Agent_ON");
 }
 telegram_agent::~telegram_agent(){
@@ -49,10 +54,12 @@ void telegram_agent::sendMessage(std::string chatId, std::string text) {
 }
 void telegram_agent::getMessage()
 {
-    cout<<"Come"<<endl;
+    vector<telegram_struct> vStruct;
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "offset: 101");
     std::string strData;
-    std::string strGet_url = "https://api.telegram.org/bot" + getApikey() + "/getUpdates";
-    curl_easy_setopt(m_get_curl, CURLOPT_WRITEFUNCTION, write_to_string);
+    std::string strGet_url = "https://api.telegram.org/bot" + getApikey() + "/getUpdates" + "?offset=" + to_string(update_id_+1);
+    curl_easy_setopt(m_get_curl, CURLOPT_WRITEFUNCTION, util::write_to_string);
     curl_easy_setopt(m_get_curl, CURLOPT_WRITEDATA, &strData);
     curl_easy_setopt(m_get_curl, CURLOPT_URL, strGet_url.c_str());
     int rc = curl_easy_perform(m_get_curl);
@@ -75,29 +82,91 @@ void telegram_agent::getMessage()
     std::string strMessage;
     bool parsingRet = reader.parse(strData, root);
     if (!parsingRet) {
-        cout<<format("[telegram_agent] Can't parse data.[parse:%s]", reader.getFormattedErrorMessages().c_str())<<endl;
+        cout<<util::format("[telegram_agent] Can't parse data.[parse:%s]", reader.getFormattedErrorMessages().c_str())<<endl;
         return;
     }
-    cout<<format("[telegram_agent] %s]", "parse OK!")<<endl;
 
     Json::Value &data = root["ok"];
-    std::string sample = data.asString();
 
-    if(data.asString().compare("ok")==0)
+    if(data.asString().compare("true")==0)
     {
-        data = root["result"];
-        int datasize = data.size();
-        cout<<format("[telegram_agent] %s]", sample.c_str())<<endl;
+        Json::Value &array = root["result"];
+        int array_size = array.size();
+        for(int i =0; i<array_size; i++)
+        {
+            Json::Value &result = array[i];
+            int temp_update_id = result["update_id"].asInt();
+            if(temp_update_id <= update_id_)
+                break;
+            else
+            {
+                update_id_ = temp_update_id;
+                string id = result["message"]["chat"]["id"].asString();
+
+                for(auto it = vChatId.begin(); it != vChatId.end(); it++)
+                {
+                    if(*it != id) continue;
+
+                    telegram_struct temp;
+                    temp.update_id = temp_update_id;
+                    temp.chat_id = *it;
+                    temp.text = util::unicode_to_utf8(result["message"]["text"].asString());
+
+                    vStruct.insert(vStruct.begin(), temp);
+                }
+            }
+            set_ini();
+        }
+        for(auto it = vStruct.begin(); it !=vStruct.end(); it++)
+        {
+            if(strcmp(it->text.c_str(), "start")==0)
+            {
+                naverMacro->Start(nullptr);
+                //Macro Start
+            }
+            else if(strcmp(it->text.c_str(), "end")==0)
+            {
+                naverMacro->Stop();
+                //Macro End
+            }
+            else if(strcmp(it->text.substr(0,6).c_str(), "header")==0)
+            {
+                int a=1;
+                //naver_macro->setHeader();
+                //Macro Header set
+            }
+            else if(strcmp(it->text.substr(0,3).c_str(), "men")==0)
+            {
+                //Macro Member Change
+            }
+            else if(strcmp(it->text.substr(0,5).c_str(), "women")==0)
+            {
+                //Macro Member Change
+            }
+        }
     }
-
-
-
 }
 int telegram_agent::Proc(){
 
-    sendMessage(m_Chat_id,"proc");
+    //sendMessage(m_Chat_id,"proc");
     getMessage();
 
     return 0;
 }
 
+void telegram_agent::set_ini()
+{
+    std::string f( "/settings/config.ini" );
+    boost::property_tree::ptree write_pt;
+    string strchatId;
+    for(auto it = vChatId.begin(); it!=vChatId.end(); it++)
+    {
+        strchatId += *it;
+        strchatId += "|";
+    }
+    strchatId.erase(strchatId.length()-1,1);
+    write_pt.put("TELEGRAM.API_KEY", m_Api_key);
+    write_pt.put("TELEGRAM.CHAT_ID", strchatId);
+    write_pt.put("TELEGRAM.UPDATE_ID",update_id_);
+    boost::property_tree::write_ini(f, write_pt);
+}
